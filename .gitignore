@@ -44,5 +44,9 @@ coverage/
 .turbo/
 .tmp/
 
+# Locally downloaded LGPL binaries (FFmpeg, SoundTouch) — not part of the
+# repo, fetched per-machine via docs/handoffs setup steps.
+/tools/
+
 # Dev-only local test fixtures (regenerate via docs/handoffs/stage-07.md)
 apps/web/public/demo/
