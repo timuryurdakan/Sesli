@@ -9,7 +9,12 @@ import * as jwt from 'jsonwebtoken';
 import { FfmpegService } from '../ffmpeg/ffmpeg.service';
 import { TrackProcessingQueueService } from '../queue/track-processing.queue';
 import { SupabaseService } from '../supabase/supabase.service';
-import { getMaxUploadBytes, isAllowedMimeType } from './upload-validation';
+import {
+  getMaxUploadBytes,
+  getStorageQuotaBytes,
+  isAllowedMimeType,
+  wouldExceedStorageQuota,
+} from './upload-validation';
 
 /**
  * `@tus/server`'ın hook sözleşmesi hataları `{ status_code, body }` şeklinde
@@ -113,6 +118,46 @@ export class TusUploadMiddleware implements NestMiddleware {
     }
   }
 
+  /**
+   * Bölüm 7 Ajan 8 / 9.4: kullanıcının mevcut toplam depolama kullanımına
+   * bu yüklemenin (bildirilen) boyutu eklendiğinde kotayı aşıp aşmadığını
+   * kontrol eder — FFmpeg normalizasyonu gibi pahalı işler başlamadan önce.
+   */
+  private async enforceStorageQuota(
+    userId: string,
+    incomingBytes: number,
+    uploadedPath: string,
+  ): Promise<void> {
+    const { data, error } = await this.supabase.admin
+      .from('tracks')
+      .select('size_bytes')
+      .eq('user_id', userId);
+
+    if (error) {
+      throw new TusRequestError(
+        500,
+        `Kota kontrolü başarısız: ${error.message}`,
+      );
+    }
+
+    const currentUsage = (data ?? []).reduce(
+      (sum: number, row: { size_bytes: number | null }) =>
+        sum + (row.size_bytes ?? 0),
+      0,
+    );
+
+    if (
+      wouldExceedStorageQuota(
+        currentUsage,
+        incomingBytes,
+        getStorageQuotaBytes(),
+      )
+    ) {
+      await fs.rm(uploadedPath, { force: true });
+      throw new TusRequestError(413, 'Depolama kotası aşıldı');
+    }
+  }
+
   private async handleUploadFinish(
     upload: Upload,
   ): Promise<{ trackId: string; jobId: string }> {
@@ -134,6 +179,8 @@ export class TusUploadMiddleware implements NestMiddleware {
         `Unsupported file type: ${detected?.mime ?? 'unknown'}`,
       );
     }
+
+    await this.enforceStorageQuota(userId, upload.size ?? 0, uploadedPath);
 
     const normalizedPath = `${uploadedPath}.wav`;
 
@@ -166,6 +213,7 @@ export class TusUploadMiddleware implements NestMiddleware {
           title: originalName,
           storage_path: storagePath,
           duration_seconds: durationSeconds,
+          size_bytes: fileBuffer.length,
         })
         .select('id')
         .single<{ id: string }>();

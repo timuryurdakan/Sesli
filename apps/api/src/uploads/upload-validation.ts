@@ -26,3 +26,24 @@ export function getMaxUploadBytes(): number {
 export function isAllowedMimeType(mime: string | undefined): boolean {
   return !!mime && ALLOWED_MIME_TYPES.has(mime);
 }
+
+// Bölüm 7 Ajan 8 / Bölüm 9.4: kullanıcı başına depolama kotası — ücretsiz
+// altyapı maliyetini kontrol altında tutmak için.
+export const DEFAULT_STORAGE_QUOTA_BYTES = 2 * 1024 * 1024 * 1024; // 2 GB
+
+export function getStorageQuotaBytes(): number {
+  const raw = process.env.MAX_STORAGE_BYTES_PER_USER;
+  const parsed = raw ? Number(raw) : NaN;
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : DEFAULT_STORAGE_QUOTA_BYTES;
+}
+
+/** Mevcut kullanım + gelen dosya, kullanıcının kotasını aşıyor mu? */
+export function wouldExceedStorageQuota(
+  currentUsageBytes: number,
+  incomingBytes: number,
+  quotaBytes: number,
+): boolean {
+  return currentUsageBytes + incomingBytes > quotaBytes;
+}
