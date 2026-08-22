@@ -1,2 +1,16 @@
+# Stage 04 — CPU-only PyTorch wheel index first (no GPU on free-tier
+# hosting; the default PyPI index would otherwise pull large CUDA builds).
+# pip checks this index for every package below, falling back to PyPI for
+# anything it doesn't have (fastapi, demucs, etc.) — a single
+# `pip install -r requirements.txt` handles everything.
+--index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://pypi.org/simple
+
+torch==2.13.0
+torchaudio==2.11.0
+
 fastapi==0.115.6
 uvicorn[standard]==0.32.1
+numpy==2.5.2
+demucs==4.1.0
+supabase==2.31.0
