@@ -1,0 +1,26 @@
+{
+  "name": "woodshed-ai",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "pnpm --filter api start:dev",
+    "build": "pnpm -r --if-present build",
+    "lint": "pnpm -r --if-present lint",
+    "test": "pnpm -r --if-present test",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "eslint": "^9.14.0",
+    "prettier": "^3.3.3",
+    "husky": "^9.1.6",
+    "lint-staged": "^15.2.10"
+  },
+  "lint-staged": {
+    "apps/web/**/*.{ts,tsx,js,jsx}": ["eslint --config apps/web/eslint.config.mjs --fix", "prettier --write"],
+    "apps/api/**/*.ts": ["eslint --config apps/api/eslint.config.mjs --fix", "prettier --write"]
+  }
+}
