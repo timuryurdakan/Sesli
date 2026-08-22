@@ -93,6 +93,12 @@ export class TusUploadMiddleware implements NestMiddleware {
         path: '/uploads',
         datastore: new FileStore({ directory: UPLOAD_TMP_DIR }),
         maxSize: getMaxUploadBytes(),
+        // Render (ve benzeri PaaS'lar) TLS'i kendi edge proxy'sinde
+        // sonlandırıp uygulamaya düz HTTP ile iletir; bu olmadan @tus/server
+        // her zaman `http://` ile başlayan bir Location header'ı üretir —
+        // tarayıcı bunu HTTPS sayfadan "mixed content" olarak engeller ve
+        // yükleme "failed to resume upload" hatasıyla sessizce başarısız olur.
+        respectForwardedHeaders: true,
         onUploadCreate: async (req, upload) => {
           const userId = await this.authenticate(req);
           this.enforceUploadRateLimit(userId);
