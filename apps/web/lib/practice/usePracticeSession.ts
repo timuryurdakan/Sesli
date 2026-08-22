@@ -50,6 +50,7 @@ export function usePracticeSession(
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const lastBroadcastRef = useRef(0);
+  const prevIsPlayingRef = useRef(engine.isPlaying);
   const isHost = hostDeviceId === deviceId;
   const engineRef = useRef(engine);
   const isHostRef = useRef(isHost);
@@ -155,8 +156,16 @@ export function usePracticeSession(
   useEffect(() => {
     if (!isHost || !channelRef.current) return;
 
+    const isPlayingChanged = prevIsPlayingRef.current !== engine.isPlaying;
+    prevIsPlayingRef.current = engine.isPlaying;
+
     const now = Date.now();
-    if (now - lastBroadcastRef.current < BROADCAST_THROTTLE_MS) return;
+    // isPlaying değişimleri (özellikle duraklatma) throttle penceresinde
+    // asla kaybolmamalı: `currentTime` duraklatınca artık değişmediğinden bu
+    // efekt bir daha tetiklenmez, dolayısıyla atlanan bir "duraklat" olayı
+    // takipçilere sonsuza dek hiç ulaşmazdı (Ajan 11 Yüksek bulgusu). Bu
+    // yüzden isPlaying değişimi throttle'ı bypass eder.
+    if (!isPlayingChanged && now - lastBroadcastRef.current < BROADCAST_THROTTLE_MS) return;
     lastBroadcastRef.current = now;
 
     void channelRef.current.send({

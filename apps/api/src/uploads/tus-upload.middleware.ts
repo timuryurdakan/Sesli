@@ -67,6 +67,17 @@ export class TusUploadMiddleware implements NestMiddleware {
   private readonly logger = new Logger(TusUploadMiddleware.name);
   private tusServer: Server | undefined;
 
+  // Ajan 12 Yüksek bulgusu: bu middleware NestJS guard pipeline'ının (ve
+  // dolayısıyla ThrottlerGuard'ın) dışında çalışıyor, bu yüzden kendi
+  // kullanıcı-bazlı hız sınırlamasını yapıyor. Bellek-içi (in-memory) sabit
+  // pencere sayaç — tek instance için yeterli; yatay ölçekleme (birden çok
+  // API instance'ı) durumunda Redis-tabanlı paylaşımlı bir sayaca
+  // taşınmalıdır (bilinen sınırlama, launch öncesi tek instance MVP için
+  // kabul edilebilir).
+  private readonly uploadCreateTimestamps = new Map<string, number[]>();
+  private static readonly MAX_UPLOAD_CREATES_PER_WINDOW = 10;
+  private static readonly UPLOAD_CREATE_WINDOW_MS = 60 * 60 * 1000;
+
   constructor(
     private readonly supabase: SupabaseService,
     private readonly ffmpeg: FfmpegService,
@@ -85,6 +96,7 @@ export class TusUploadMiddleware implements NestMiddleware {
         maxSize: getMaxUploadBytes(),
         onUploadCreate: (req, upload) => {
           const userId = this.authenticate(req);
+          this.enforceUploadRateLimit(userId);
           return Promise.resolve({ metadata: { ...upload.metadata, userId } });
         },
         onUploadFinish: async (_req, upload) => {
@@ -97,6 +109,26 @@ export class TusUploadMiddleware implements NestMiddleware {
       });
     }
     return this.tusServer;
+  }
+
+  private enforceUploadRateLimit(userId: string): void {
+    const now = Date.now();
+    const windowStart = now - TusUploadMiddleware.UPLOAD_CREATE_WINDOW_MS;
+    const timestamps = (this.uploadCreateTimestamps.get(userId) ?? []).filter(
+      (t) => t > windowStart,
+    );
+
+    if (
+      timestamps.length >= TusUploadMiddleware.MAX_UPLOAD_CREATES_PER_WINDOW
+    ) {
+      throw new TusRequestError(
+        429,
+        'Çok fazla yükleme isteği — lütfen daha sonra tekrar deneyin',
+      );
+    }
+
+    timestamps.push(now);
+    this.uploadCreateTimestamps.set(userId, timestamps);
   }
 
   private authenticate(req: unknown): string {
@@ -119,9 +151,17 @@ export class TusUploadMiddleware implements NestMiddleware {
   }
 
   /**
-   * Bölüm 7 Ajan 8 / 9.4: kullanıcının mevcut toplam depolama kullanımına
-   * bu yüklemenin (bildirilen) boyutu eklendiğinde kotayı aşıp aşmadığını
-   * kontrol eder — FFmpeg normalizasyonu gibi pahalı işler başlamadan önce.
+   * Bölüm 7 Ajan 8 / 9.4: FFmpeg normalizasyonu gibi pahalı işler başlamadan
+   * önce, kullanıcının mevcut kullanımına bu yüklemenin ham (henüz normalize
+   * edilmemiş) boyutu eklendiğinde kotayı bariz biçimde aşıp aşmadığına
+   * bakan HIZLI ve NON-AUTHORITATIVE bir ön kontrol. Yalnızca gereksiz
+   * FFmpeg/Storage işini erken keser — TOCTOU'ya karşı korumasızdır ve ham
+   * boyut normalize edilmiş WAV'dan küçük olabileceğinden (örn. mp3→WAV)
+   * kotayı olduğundan düşük tahmin edebilir. Asıl/otoriter ve atomik kontrol,
+   * gerçek (normalize edilmiş) boyutla `insert_track_if_within_quota`
+   * Postgres fonksiyonu üzerinden `handleUploadFinish`'te yapılır (Ajan 12
+   * Yüksek bulgusu, Stage 10 sonrası düzeltme — bkz.
+   * supabase/migrations/0006_atomic_storage_quota.sql).
    */
   private async enforceStorageQuota(
     userId: string,
@@ -206,30 +246,46 @@ export class TusUploadMiddleware implements NestMiddleware {
         );
       }
 
-      const { data: track, error: trackError } = await this.supabase.admin
-        .from('tracks')
-        .insert({
-          user_id: userId,
-          title: originalName,
-          storage_path: storagePath,
-          duration_seconds: durationSeconds,
-          size_bytes: fileBuffer.length,
-        })
-        .select('id')
-        .single<{ id: string }>();
+      // Kota kontrolü ve track-insert'i tek bir atomik Postgres fonksiyonu
+      // üzerinden yapılır (kullanıcı bazlı advisory lock ile serileştirilir)
+      // — hem TOCTOU yarış durumunu hem de ham/normalize boyut
+      // tutarsızlığını giderir (Ajan 12 Yüksek bulgusu). Bu, Storage'a
+      // yüklemeden SONRA çalışır; kota aşılırsa az önce yüklenen nesne geri
+      // alınır.
+      const rpcResult = await this.supabase.admin.rpc(
+        'insert_track_if_within_quota',
+        {
+          p_user_id: userId,
+          p_title: originalName,
+          p_storage_path: storagePath,
+          p_duration_seconds: durationSeconds,
+          p_size_bytes: fileBuffer.length,
+          p_quota_bytes: getStorageQuotaBytes(),
+        },
+      );
+      const track = rpcResult.data as { id: string } | null;
+      const trackError = rpcResult.error;
+
+      if (trackError?.message?.includes('STORAGE_QUOTA_EXCEEDED')) {
+        await this.supabase.admin.storage.from('tracks').remove([storagePath]);
+        throw new TusRequestError(413, 'Depolama kotası aşıldı');
+      }
 
       if (trackError || !track) {
+        await this.supabase.admin.storage.from('tracks').remove([storagePath]);
         throw new TusRequestError(
           500,
           `Track kaydı oluşturulamadı: ${trackError?.message}`,
         );
       }
 
+      const trackId = track.id;
+
       const { data: jobRow, error: jobError } = await this.supabase.admin
         .from('jobs')
         .insert({
           user_id: userId,
-          track_id: track.id,
+          track_id: trackId,
           status: 'pending',
           input: { storagePath, durationSeconds },
         })
@@ -245,11 +301,11 @@ export class TusUploadMiddleware implements NestMiddleware {
 
       await this.queue.enqueue({
         jobId: jobRow.id,
-        trackId: track.id,
+        trackId,
         storagePath,
       });
 
-      return { trackId: track.id, jobId: jobRow.id };
+      return { trackId, jobId: jobRow.id };
     } finally {
       await fs.rm(uploadedPath, { force: true });
       await fs.rm(normalizedPath, { force: true });

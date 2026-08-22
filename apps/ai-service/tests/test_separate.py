@@ -1,12 +1,13 @@
 from unittest.mock import AsyncMock
 
+from conftest import TEST_INTERNAL_KEY
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.routers import separate as separate_router
 from app.services.separation import UnsupportedAudioError
 
-client = TestClient(app)
+client = TestClient(app, headers={"X-Internal-Service-Key": TEST_INTERNAL_KEY})
 
 
 def test_separate_success(monkeypatch) -> None:

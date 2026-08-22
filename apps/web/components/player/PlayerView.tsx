@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { usePlayerEngine } from "@/lib/player/usePlayerEngine";
 import { usePracticeSession } from "@/lib/practice/usePracticeSession";
 import { STEM_NAMES, type StemName } from "@/lib/player/types";
@@ -36,6 +37,19 @@ export function PlayerView({ track }: PlayerViewProps) {
   });
 
   const practiceSession = usePracticeSession(track.id, track.job?.chords ?? [], engine);
+
+  // `jobs` tablosu Realtime yayınına eklenmiş ama buna abone olmuyoruz;
+  // yükleme sonrası kullanıcı sayfaya "processing" durumundayken düştüğünde
+  // hiçbir şey bunu "done"a güncellemiyordu (Ajan 11 Yüksek bulgusu).
+  // En basit/güvenilir düzeltme: iş bitene kadar birkaç saniyede bir sunucu
+  // bileşenini (fetchTrack) yeniden çalıştır.
+  const router = useRouter();
+  const jobStatus = track.job?.status;
+  useEffect(() => {
+    if (jobStatus === "done" || jobStatus === "failed") return;
+    const interval = setInterval(() => router.refresh(), 4000);
+    return () => clearInterval(interval);
+  }, [jobStatus, router]);
 
   if (!track.job || track.job.status !== "done") {
     return (

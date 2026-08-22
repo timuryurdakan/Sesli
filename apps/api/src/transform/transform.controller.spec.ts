@@ -19,6 +19,7 @@ describe('TransformController', () => {
   beforeEach(() => {
     fetchMock = jest.fn();
     global.fetch = fetchMock;
+    process.env.AI_SERVICE_INTERNAL_KEY = 'test-internal-key';
   });
 
   it('rejects a missing storagePath', async () => {

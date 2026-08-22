@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Job, Worker } from 'bullmq';
 import IORedis from 'ioredis';
+import { buildAiServiceHeaders } from '../ai-service/ai-service-headers';
 import { SupabaseService } from '../supabase/supabase.service';
 import {
   TRACK_PROCESSING_QUEUE_NAME,
@@ -129,7 +130,7 @@ export class TrackProcessingWorker implements OnModuleInit, OnModuleDestroy {
     try {
       response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildAiServiceHeaders(),
         body: JSON.stringify(body),
       });
     } catch (err) {

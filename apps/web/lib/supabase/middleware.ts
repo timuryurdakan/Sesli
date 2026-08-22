@@ -11,9 +11,23 @@ export async function updateSession(request: NextRequest) {
 
   // Supabase henüz yapılandırılmamışsa (ör. yerel geliştirme, Stage 01/02
   // handoff'larındaki bilinen sınırlama) oturum kontrolünü atla — auth
-  // gerektirmeyen sayfalar yine de açılabilsin. Korumalı sayfalar bu
-  // durumda sunucu bileşenlerinde ayrıca oturumsuz kalacaktır.
+  // gerektirmeyen sayfalar yine de açılabilsin.
+  //
+  // ÜRETİMDE bu "fail-open" olamaz (Ajan 12 Yüksek #3): env değişkenleri bir
+  // deploy/secret hatasıyla kaybolursa korumalı yollar sessizce herkese açık
+  // kalmamalı. Bu yüzden production'da korumalı bir yol istenirse
+  // fail-closed davranılır (login'e yönlendirilir) — geliştirmede ise eski
+  // davranış (sayfa oturumsuz açılır) korunur.
   if (!supabaseUrl || !supabaseAnonKey) {
+    if (process.env.NODE_ENV === "production") {
+      const isProtected = PROTECTED_PATHS.some((path) => request.nextUrl.pathname.startsWith(path));
+      if (isProtected) {
+        const redirectUrl = request.nextUrl.clone();
+        redirectUrl.pathname = "/login";
+        redirectUrl.searchParams.set("redirectTo", request.nextUrl.pathname);
+        return NextResponse.redirect(redirectUrl);
+      }
+    }
     return supabaseResponse;
   }
 

@@ -36,6 +36,7 @@ describe('TrackProcessingWorker.process', () => {
 
     fetchMock = jest.fn();
     global.fetch = fetchMock;
+    process.env.AI_SERVICE_INTERNAL_KEY = 'test-internal-key';
   });
 
   it('marks the job done with merged stems + chords + tempo on success', async () => {

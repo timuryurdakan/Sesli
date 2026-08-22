@@ -1,11 +1,12 @@
 from unittest.mock import MagicMock, patch
 
+from conftest import TEST_INTERNAL_KEY
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.services.soundstretch import SoundStretchError
 
-client = TestClient(app)
+client = TestClient(app, headers={"X-Internal-Service-Key": TEST_INTERNAL_KEY})
 
 
 def test_tempo_endpoint_returns_bpm_and_key() -> None:
