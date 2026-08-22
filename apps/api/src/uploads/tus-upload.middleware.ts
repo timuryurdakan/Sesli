@@ -83,8 +83,11 @@ export class TusUploadMiddleware implements NestMiddleware {
           return Promise.resolve({ metadata: { ...upload.metadata, userId } });
         },
         onUploadFinish: async (_req, upload) => {
-          await this.handleUploadFinish(upload);
-          return {};
+          const { trackId, jobId } = await this.handleUploadFinish(upload);
+          // tus spesifikasyonu response body'yi öngörmez ama çoğu istemci
+          // (tus-js-client dahil) destekler — web istemcisi (Ajan 7) bu
+          // sayede yükleme bitince doğrudan /tracks/{trackId}'e yönlenebilir.
+          return { body: JSON.stringify({ trackId, jobId }) };
         },
       });
     }
@@ -110,7 +113,9 @@ export class TusUploadMiddleware implements NestMiddleware {
     }
   }
 
-  private async handleUploadFinish(upload: Upload): Promise<void> {
+  private async handleUploadFinish(
+    upload: Upload,
+  ): Promise<{ trackId: string; jobId: string }> {
     const userId = upload.metadata?.userId ?? undefined;
     const originalName = upload.metadata?.filename ?? upload.id;
     const uploadedPath =
@@ -195,6 +200,8 @@ export class TusUploadMiddleware implements NestMiddleware {
         trackId: track.id,
         storagePath,
       });
+
+      return { trackId: track.id, jobId: jobRow.id };
     } finally {
       await fs.rm(uploadedPath, { force: true });
       await fs.rm(normalizedPath, { force: true });

@@ -43,3 +43,6 @@ coverage/
 *.tsbuildinfo
 .turbo/
 .tmp/
+
+# Dev-only local test fixtures (regenerate via docs/handoffs/stage-07.md)
+apps/web/public/demo/

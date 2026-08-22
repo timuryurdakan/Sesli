@@ -8,6 +8,7 @@ import { QueueModule } from './queue/queue.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { JobsModule } from './jobs/jobs.module';
 import { TransformModule } from './transform/transform.module';
+import { TracksModule } from './tracks/tracks.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { TransformModule } from './transform/transform.module';
     UploadsModule,
     JobsModule,
     TransformModule,
+    TracksModule,
   ],
   controllers: [AppController],
   providers: [AppService],

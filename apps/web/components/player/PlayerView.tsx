@@ -1,0 +1,136 @@
+"use client";
+
+import { useRef, useState } from "react";
+import { usePlayerEngine } from "@/lib/player/usePlayerEngine";
+import { STEM_NAMES, type StemName } from "@/lib/player/types";
+import type { TrackDetail } from "@/lib/player/api";
+import { MixerChannel } from "./MixerChannel";
+import { ChordStrip } from "./ChordStrip";
+import { LoopControls } from "./LoopControls";
+import { TempoControls } from "./TempoControls";
+
+const COUNT_IN_OPTIONS = [1, 2, 4, 8];
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+interface PlayerViewProps {
+  track: TrackDetail;
+}
+
+export function PlayerView({ track }: PlayerViewProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [stemUrls, setStemUrls] = useState<Partial<Record<StemName, string>>>(() => {
+    const entries = Object.entries(track.job?.stems ?? {}).filter(([, url]) => url != null) as [
+      StemName,
+      string,
+    ][];
+    return Object.fromEntries(entries);
+  });
+  const [countInBeats, setCountInBeats] = useState(4);
+
+  const engine = usePlayerEngine(containerRef, {
+    visualUrl: track.rawUrl ?? "",
+    stemUrls,
+    bpm: track.job?.bpm ?? null,
+  });
+
+  if (!track.job || track.job.status !== "done") {
+    return (
+      <main className="mx-auto max-w-md px-4 py-16 text-center">
+        <h1 className="text-xl font-semibold">{track.title}</h1>
+        <p className="mt-4 text-gray-600">
+          {track.job?.status === "failed"
+            ? `İşleme başarısız oldu: ${track.job.error ?? "bilinmeyen hata"}`
+            : "Parça işleniyor… (ayırma/akor/tempo analizleri sürüyor)"}
+        </p>
+      </main>
+    );
+  }
+
+  const availableStems = STEM_NAMES.filter((name) => stemUrls[name]);
+
+  return (
+    <main className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8">
+      <header className="flex flex-wrap items-baseline justify-between gap-2">
+        <h1 className="text-2xl font-semibold">{track.title}</h1>
+        {track.job.key && <span className="text-sm text-gray-500">Ton: {track.job.key}</span>}
+        {track.job.bpm && (
+          <span className="text-sm text-gray-500">{Math.round(track.job.bpm)} BPM</span>
+        )}
+      </header>
+
+      <ChordStrip chords={track.job.chords} currentTime={engine.currentTime} />
+
+      <div ref={containerRef} className="w-full" data-testid="waveform" />
+
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="tabular-nums text-sm text-gray-600">
+          {formatTime(engine.currentTime)} / {formatTime(engine.duration)}
+        </span>
+
+        <button
+          type="button"
+          onClick={() =>
+            engine.isPlaying ? engine.playPause() : engine.playWithCountIn(countInBeats)
+          }
+          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
+        >
+          {engine.isPlaying ? "Duraklat" : "Çal"}
+        </button>
+
+        <label className="flex items-center gap-1 text-sm">
+          Geri sayım:
+          <select
+            value={countInBeats}
+            onChange={(e) => setCountInBeats(Number(e.target.value))}
+            className="rounded border border-gray-300 px-1 py-0.5"
+          >
+            {COUNT_IN_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                {n} vuruş
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <button
+          type="button"
+          onClick={engine.toggleMetronome}
+          aria-pressed={engine.metronomeOn}
+          className={`rounded-md px-3 py-2 text-sm font-medium ${
+            engine.metronomeOn ? "bg-indigo-100 text-indigo-700" : "bg-gray-100 text-gray-700"
+          }`}
+        >
+          Metronom {engine.metronomeOn ? "Açık" : "Kapalı"}
+        </button>
+      </div>
+
+      <LoopControls loopRegion={engine.loopRegion} onClear={engine.clearLoop} />
+
+      <section aria-label="Mikser" className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
+        {availableStems.map((name) => (
+          <MixerChannel
+            key={name}
+            name={name}
+            state={engine.mixer[name]}
+            onChange={(state) => engine.setChannelState(name, state)}
+          />
+        ))}
+      </section>
+
+      {track.job.stemPaths && (
+        <TempoControls
+          stemStoragePaths={track.job.stemPaths}
+          onTransformed={(newUrls) => {
+            setStemUrls((prev) => ({ ...prev, ...newUrls }));
+            engine.replaceStemSources(newUrls);
+          }}
+        />
+      )}
+    </main>
+  );
+}
