@@ -5,7 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Request } from 'express';
-import * as jwt from 'jsonwebtoken';
+import { SupabaseService } from '../supabase/supabase.service';
 
 export interface AuthenticatedUser {
   id: string;
@@ -19,9 +19,20 @@ function extractBearerToken(request: Request): string | undefined {
   return scheme === 'Bearer' ? token : undefined;
 }
 
+/**
+ * Token doğrulaması Supabase'in kendi `auth.getUser()` uç noktası üzerinden
+ * (uzaktan) yapılır — yerel bir sabit sırla (`jwt.verify(token, secret)`)
+ * DEĞİL. Supabase projeleri artık varsayılan olarak asimetrik JWT imzalama
+ * anahtarları (ör. ES256) kullanabiliyor; bu durumda sabit bir HS256 sırrıyla
+ * yerel doğrulama asla başarılı olmaz (imzalama şeması tamamen farklı).
+ * Supabase'in kendi API'sine sorma, hangi imzalama şeması kullanılırsa
+ * kullanılsın doğru sonucu verir.
+ */
 @Injectable()
 export class SupabaseAuthGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
+  constructor(private readonly supabase: SupabaseService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
     const token = extractBearerToken(request);
 
@@ -29,20 +40,16 @@ export class SupabaseAuthGuard implements CanActivate {
       throw new UnauthorizedException('Missing bearer token');
     }
 
-    const secret = process.env.SUPABASE_JWT_SECRET;
-    if (!secret) {
-      throw new Error('SUPABASE_JWT_SECRET is not configured');
-    }
+    const { data, error } = await this.supabase.admin.auth.getUser(token);
 
-    try {
-      const payload = jwt.verify(token, secret) as jwt.JwtPayload;
-      (request as Request & { user: AuthenticatedUser }).user = {
-        id: payload.sub as string,
-        email: payload.email as string | undefined,
-      };
-      return true;
-    } catch {
+    if (error || !data.user) {
       throw new UnauthorizedException('Invalid or expired token');
     }
+
+    (request as Request & { user: AuthenticatedUser }).user = {
+      id: data.user.id,
+      email: data.user.email,
+    };
+    return true;
   }
 }

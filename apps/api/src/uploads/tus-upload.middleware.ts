@@ -5,7 +5,6 @@ import { Server, type Upload } from '@tus/server';
 import { FileStore } from '@tus/file-store';
 import type { Request, Response } from 'express';
 import { fileTypeFromFile } from 'file-type';
-import * as jwt from 'jsonwebtoken';
 import { FfmpegService } from '../ffmpeg/ffmpeg.service';
 import { TrackProcessingQueueService } from '../queue/track-processing.queue';
 import { SupabaseService } from '../supabase/supabase.service';
@@ -94,10 +93,10 @@ export class TusUploadMiddleware implements NestMiddleware {
         path: '/uploads',
         datastore: new FileStore({ directory: UPLOAD_TMP_DIR }),
         maxSize: getMaxUploadBytes(),
-        onUploadCreate: (req, upload) => {
-          const userId = this.authenticate(req);
+        onUploadCreate: async (req, upload) => {
+          const userId = await this.authenticate(req);
           this.enforceUploadRateLimit(userId);
-          return Promise.resolve({ metadata: { ...upload.metadata, userId } });
+          return { metadata: { ...upload.metadata, userId } };
         },
         onUploadFinish: async (_req, upload) => {
           const { trackId, jobId } = await this.handleUploadFinish(upload);
@@ -131,23 +130,30 @@ export class TusUploadMiddleware implements NestMiddleware {
     this.uploadCreateTimestamps.set(userId, timestamps);
   }
 
-  private authenticate(req: unknown): string {
+  /**
+   * Supabase'in kendi `auth.getUser()` uç noktası üzerinden (uzaktan)
+   * doğrulanır — yerel bir sabit sırla DEĞİL. Supabase projeleri artık
+   * varsayılan olarak asimetrik JWT imzalama anahtarları (ör. ES256)
+   * kullanabiliyor; sabit bir HS256 sırrıyla yerel doğrulama bu durumda asla
+   * başarılı olmaz (bkz. supabase-auth.guard.ts'teki aynı düzeltme).
+   */
+  private async authenticate(req: unknown): Promise<string> {
     const authHeader = readHeader(req, 'authorization');
     const token = authHeader?.startsWith('Bearer ')
       ? authHeader.slice(7)
       : undefined;
-    const secret = process.env.SUPABASE_JWT_SECRET;
 
-    if (!token || !secret) {
+    if (!token) {
       throw new TusRequestError(401, 'Missing or invalid bearer token');
     }
 
-    try {
-      const payload = jwt.verify(token, secret) as jwt.JwtPayload;
-      return payload.sub as string;
-    } catch {
+    const { data, error } = await this.supabase.admin.auth.getUser(token);
+
+    if (error || !data.user) {
       throw new TusRequestError(401, 'Invalid or expired token');
     }
+
+    return data.user.id;
   }
 
   /**

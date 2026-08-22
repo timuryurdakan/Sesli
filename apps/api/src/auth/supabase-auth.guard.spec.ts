@@ -1,8 +1,6 @@
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
-import * as jwt from 'jsonwebtoken';
 import { SupabaseAuthGuard, AuthenticatedUser } from './supabase-auth.guard';
-
-const SECRET = 'test-secret';
+import { SupabaseService } from '../supabase/supabase.service';
 
 function makeContext(headers: Record<string, string>): {
   context: ExecutionContext;
@@ -20,42 +18,61 @@ function makeContext(headers: Record<string, string>): {
   return { context, getRequest: () => request };
 }
 
+function makeSupabase(
+  getUser: (
+    token: string,
+  ) => Promise<{ data: { user: unknown }; error: unknown }>,
+): SupabaseService {
+  return {
+    admin: { auth: { getUser } },
+  } as unknown as SupabaseService;
+}
+
 describe('SupabaseAuthGuard', () => {
-  const originalSecret = process.env.SUPABASE_JWT_SECRET;
-
-  beforeEach(() => {
-    process.env.SUPABASE_JWT_SECRET = SECRET;
-  });
-
-  afterAll(() => {
-    process.env.SUPABASE_JWT_SECRET = originalSecret;
-  });
-
-  it('rejects requests without an Authorization header', () => {
-    const guard = new SupabaseAuthGuard();
+  it('rejects requests without an Authorization header', async () => {
+    const guard = new SupabaseAuthGuard(
+      makeSupabase(() =>
+        Promise.resolve({ data: { user: null }, error: null }),
+      ),
+    );
     const { context } = makeContext({});
-    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+    await expect(guard.canActivate(context)).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 
-  it('rejects an invalid/expired token', () => {
-    const guard = new SupabaseAuthGuard();
+  it('rejects an invalid/expired token', async () => {
+    const guard = new SupabaseAuthGuard(
+      makeSupabase(() =>
+        Promise.resolve({
+          data: { user: null },
+          error: { message: 'invalid' },
+        }),
+      ),
+    );
     const { context } = makeContext({
       authorization: 'Bearer not-a-real-token',
     });
-    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+    await expect(guard.canActivate(context)).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 
-  it('accepts a valid token and attaches the user to the request', () => {
-    const token = jwt.sign(
-      { sub: 'user-123', email: 'test@example.com' },
-      SECRET,
+  it('accepts a valid token and attaches the user to the request', async () => {
+    const guard = new SupabaseAuthGuard(
+      makeSupabase((token) => {
+        expect(token).toBe('valid-token');
+        return Promise.resolve({
+          data: { user: { id: 'user-123', email: 'test@example.com' } },
+          error: null,
+        });
+      }),
     );
-    const guard = new SupabaseAuthGuard();
     const { context, getRequest } = makeContext({
-      authorization: `Bearer ${token}`,
+      authorization: 'Bearer valid-token',
     });
 
-    expect(guard.canActivate(context)).toBe(true);
+    await expect(guard.canActivate(context)).resolves.toBe(true);
     expect(getRequest().user).toEqual({
       id: 'user-123',
       email: 'test@example.com',
