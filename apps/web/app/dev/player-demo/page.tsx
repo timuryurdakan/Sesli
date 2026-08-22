@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import { PlayerView } from "@/components/player/PlayerView";
 import type { TrackDetail } from "@/lib/player/api";
 
@@ -44,5 +45,11 @@ const DEMO_TRACK: TrackDetail = {
 };
 
 export default function PlayerDemoPage() {
+  // Bölüm 7 Ajan 10: yalnızca geliştirme ortamında erişilebilir — production'a
+  // yanlışlıkla dahil edilirse gerçek kullanıcılara görünmesin diye.
+  if (process.env.NODE_ENV === "production") {
+    notFound();
+  }
+
   return <PlayerView track={DEMO_TRACK} />;
 }

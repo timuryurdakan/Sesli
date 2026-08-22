@@ -2,6 +2,8 @@ packages:
   - "apps/*"
   - "packages/*"
 allowBuilds:
+  '@sentry/cli': true
+  '@sentry/node-cpu-profiler': false
   msgpackr-extract: true
   unrs-resolver: true
 minimumReleaseAgeExclude:

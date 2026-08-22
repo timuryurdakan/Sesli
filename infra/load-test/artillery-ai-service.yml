@@ -1,0 +1,16 @@
+config:
+  target: "http://localhost:8000"
+  phases:
+    - duration: 30
+      arrivalRate: 5
+      name: warm-up
+    - duration: 60
+      arrivalRate: 15
+      name: sustained-load
+scenarios:
+  - name: "AI service health check under load"
+    flow:
+      - get:
+          url: "/health"
+          expect:
+            - statusCode: 200

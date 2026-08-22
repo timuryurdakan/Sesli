@@ -1,0 +1,29 @@
+config:
+  target: "http://localhost:3001"
+  phases:
+    - duration: 30
+      arrivalRate: 5
+      name: warm-up
+    - duration: 60
+      arrivalRate: 20
+      name: sustained-load
+    - duration: 30
+      arrivalRate: 50
+      name: burst
+  plugins:
+    ensure: {}
+scenarios:
+  - name: "API root + guarded endpoints under load"
+    flow:
+      - get:
+          url: "/"
+          expect:
+            - statusCode: 200
+      - get:
+          url: "/tracks"
+          expect:
+            - statusCode: 401 # Supabase JWT yok — guard'ın doğru reddettiğini doğrular
+      - get:
+          url: "/jobs/00000000-0000-0000-0000-000000000000"
+          expect:
+            - statusCode: 401
