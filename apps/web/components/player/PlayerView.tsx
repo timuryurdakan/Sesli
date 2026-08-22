@@ -2,20 +2,17 @@
 
 import { useRef, useState } from "react";
 import { usePlayerEngine } from "@/lib/player/usePlayerEngine";
+import { usePracticeSession } from "@/lib/practice/usePracticeSession";
 import { STEM_NAMES, type StemName } from "@/lib/player/types";
+import { formatTime } from "@/lib/player/format";
 import type { TrackDetail } from "@/lib/player/api";
 import { MixerChannel } from "./MixerChannel";
 import { ChordStrip } from "./ChordStrip";
 import { LoopControls } from "./LoopControls";
 import { TempoControls } from "./TempoControls";
+import { PracticeSessionBar } from "./PracticeSessionBar";
 
 const COUNT_IN_OPTIONS = [1, 2, 4, 8];
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
 
 interface PlayerViewProps {
   track: TrackDetail;
@@ -37,6 +34,8 @@ export function PlayerView({ track }: PlayerViewProps) {
     stemUrls,
     bpm: track.job?.bpm ?? null,
   });
+
+  const practiceSession = usePracticeSession(track.id, track.job?.chords ?? [], engine);
 
   if (!track.job || track.job.status !== "done") {
     return (
@@ -67,6 +66,13 @@ export function PlayerView({ track }: PlayerViewProps) {
 
       <div ref={containerRef} className="w-full" data-testid="waveform" />
 
+      <PracticeSessionBar
+        connected={practiceSession.connected}
+        isHost={practiceSession.isHost}
+        isFollowing={practiceSession.isFollowing}
+        onClaimHost={practiceSession.claimHost}
+      />
+
       <div className="flex flex-wrap items-center gap-3">
         <span className="tabular-nums text-sm text-gray-600">
           {formatTime(engine.currentTime)} / {formatTime(engine.duration)}
@@ -74,10 +80,11 @@ export function PlayerView({ track }: PlayerViewProps) {
 
         <button
           type="button"
+          disabled={practiceSession.isFollowing}
           onClick={() =>
             engine.isPlaying ? engine.playPause() : engine.playWithCountIn(countInBeats)
           }
-          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
+          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           {engine.isPlaying ? "Duraklat" : "Çal"}
         </button>
@@ -86,6 +93,7 @@ export function PlayerView({ track }: PlayerViewProps) {
           Geri sayım:
           <select
             value={countInBeats}
+            disabled={practiceSession.isFollowing}
             onChange={(e) => setCountInBeats(Number(e.target.value))}
             className="rounded border border-gray-300 px-1 py-0.5"
           >

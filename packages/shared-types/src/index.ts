@@ -9,6 +9,16 @@ export interface Track {
   createdAt: string;
 }
 
+/** Bölüm 7 Ajan 9 — Senkronize Prova Modu broadcast payload'ı. */
+export interface PracticeSessionState {
+  trackId: string;
+  position: number;
+  isPlaying: boolean;
+  currentChordIndex: number;
+  hostDeviceId: string;
+  updatedAt: number;
+}
+
 export interface ChordSegment {
   start: number;
   end: number;

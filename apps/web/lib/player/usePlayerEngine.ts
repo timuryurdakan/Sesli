@@ -74,6 +74,8 @@ export function usePlayerEngine(
   }, [options.bpm]);
 
   const playPause = useCallback(() => engineRef.current?.playPause(), []);
+  const play = useCallback(() => engineRef.current?.play(), []);
+  const pause = useCallback(() => engineRef.current?.pause(), []);
   const seekTo = useCallback((time: number) => engineRef.current?.seekTo(time), []);
 
   const playWithCountIn = useCallback((beats = 4) => {
@@ -123,6 +125,8 @@ export function usePlayerEngine(
     loopRegion,
     metronomeOn,
     playPause,
+    play,
+    pause,
     seekTo,
     playWithCountIn,
     setChannelState,

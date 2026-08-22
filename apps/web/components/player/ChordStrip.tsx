@@ -1,5 +1,6 @@
 "use client";
 
+import { currentChordIndexFor } from "@/lib/player/chords";
 import type { ChordSegment } from "@/lib/player/types";
 
 interface ChordStripProps {
@@ -12,7 +13,7 @@ export function ChordStrip({ chords, currentTime }: ChordStripProps) {
     return <p className="text-sm text-gray-500">Akor verisi yok.</p>;
   }
 
-  const activeIndex = chords.findIndex((c) => currentTime >= c.start && currentTime < c.end);
+  const activeIndex = currentChordIndexFor(chords, currentTime);
   const upcoming = chords.slice(Math.max(activeIndex, 0), Math.max(activeIndex, 0) + 6);
 
   return (
