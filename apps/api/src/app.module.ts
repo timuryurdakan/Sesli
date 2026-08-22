@@ -7,6 +7,7 @@ import { FfmpegModule } from './ffmpeg/ffmpeg.module';
 import { QueueModule } from './queue/queue.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { JobsModule } from './jobs/jobs.module';
+import { TransformModule } from './transform/transform.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { JobsModule } from './jobs/jobs.module';
     UsersModule,
     UploadsModule,
     JobsModule,
+    TransformModule,
   ],
   controllers: [AppController],
   providers: [AppService],

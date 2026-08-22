@@ -43,6 +43,10 @@ Her uygulamanın `.env.example` dosyasını `.env` olarak kopyalayıp değerleri
 
 `apps/api` dosya normalizasyonu için FFmpeg'e ihtiyaç duyar (Stage 03). **Bölüm 9.2 gereği yalnızca LGPL derlemesi kullanılmalı** (GPL bileşenler — libx264/libx265/librubberband — dahil eden derlemeler kapalı kaynak ticari kullanımla uyumsuzdur). Önerilen kaynak: [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/releases) "`*-lgpl*`" varyantı (Windows: `win64-lgpl`, Linux: `linux64-lgpl`). İndirip `apps/api/.env`'de `FFMPEG_PATH`/`FFPROBE_PATH` ile binary yolunu belirtin.
 
+### SoundTouch (LGPL v2.1 — apps/ai-service)
+
+Tempo/ton değiştirme (Stage 06) için SoundTouch'ın `soundstretch` CLI aracına ihtiyaç var. Windows için hazır derleme: [surina.net/soundtouch](https://www.surina.net/soundtouch/download.html) ("SoundStretch" — DLL değil, CLI). Linux için kaynak kodundan derlenmeli ([codeberg.org/soundtouch/soundtouch](https://codeberg.org/soundtouch/soundtouch)). İndirip `apps/ai-service/.env`'de `SOUNDSTRETCH_PATH` ile binary yolunu belirtin.
+
 ## Geliştirme
 
 ```bash

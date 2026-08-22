@@ -38,7 +38,7 @@ describe('TrackProcessingWorker.process', () => {
     global.fetch = fetchMock;
   });
 
-  it('marks the job done with merged stems + chords on success', async () => {
+  it('marks the job done with merged stems + chords + tempo on success', async () => {
     fetchMock
       .mockResolvedValueOnce({
         ok: true,
@@ -49,6 +49,10 @@ describe('TrackProcessingWorker.process', () => {
         ok: true,
         json: () =>
           Promise.resolve({ chords: [{ start: 0, end: 1.8, chord: 'Am' }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ bpm: 120.5, key: 'A minor' }),
       });
 
     const worker = new TrackProcessingWorker(supabase);
@@ -64,6 +68,11 @@ describe('TrackProcessingWorker.process', () => {
       'http://localhost:8000/chords',
       expect.anything(),
     );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'http://localhost:8000/tempo',
+      expect.anything(),
+    );
     expect(updateCalls).toEqual([
       { status: 'processing' },
       {
@@ -71,6 +80,8 @@ describe('TrackProcessingWorker.process', () => {
         output: {
           stems: { vocals: 'stems/job-1/vocals.wav' },
           chords: [{ start: 0, end: 1.8, chord: 'Am' }],
+          bpm: 120.5,
+          key: 'A minor',
         },
       },
     ]);
@@ -128,6 +139,36 @@ describe('TrackProcessingWorker.process', () => {
       status: 'failed',
       error:
         'AI servisi hatası (http://localhost:8000/chords, 500): chord detection failed',
+    });
+  });
+
+  it('marks the job failed if tempo detection fails after chords succeed', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ stems: { vocals: 'stems/job-1/vocals.wav' } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ chords: [{ start: 0, end: 1.8, chord: 'Am' }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        text: () => Promise.resolve('tempo detection failed'),
+      });
+
+    const worker = new TrackProcessingWorker(supabase);
+    await expect(
+      (worker as unknown as PrivateProcess).process(makeJob(JOB_DATA)),
+    ).rejects.toThrow();
+
+    expect(updateCalls[1]).toEqual({
+      status: 'failed',
+      error:
+        'AI servisi hatası (http://localhost:8000/tempo, 500): tempo detection failed',
     });
   });
 });

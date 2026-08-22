@@ -26,14 +26,18 @@ interface ChordsResponse {
   chords: ChordSegment[];
 }
 
+interface TempoResponse {
+  bpm: number;
+  key: string;
+}
+
 /**
  * BullMQ worker: kuyruktaki "track-processing" işini alır ve FastAPI AI
  * servisinin ilgili uç noktalarını sırayla çağırır — stem ayırma (Ajan 4,
- * `POST /separate`), akor tespiti (Ajan 5, `POST /chords`); tempo/ton (Ajan
- * 6, `POST /tempo`) ileride aynı desenle eklenecek. Sonuçlar tek bir
- * `jobs.output` JSON'ında birleştirilip `packages/shared-types`'taki
- * `StemJobOutput` sözleşmesine (`stems`, `chords`, `bpm`, `key`) uygun
- * şekilde yazılır.
+ * `POST /separate`), akor tespiti (Ajan 5, `POST /chords`), tempo/ton
+ * tespiti (Ajan 6, `POST /tempo`). Sonuçlar tek bir `jobs.output`
+ * JSON'ında birleştirilip `packages/shared-types`'taki `StemJobOutput`
+ * sözleşmesine (`stems`, `chords`, `bpm`, `key`) uygun şekilde yazılır.
  *
  * CPU'da bir parçanın işlenmesi dakikalar sürebilir; bu yüzden burada kısa
  * bir HTTP timeout uygulanmaz — BullMQ zaten işi arka planda, kullanıcıyı
@@ -95,9 +99,19 @@ export class TrackProcessingWorker implements OnModuleInit, OnModuleDestroy {
       },
     );
 
+    const tempo = await this.callAiService<TempoResponse>(
+      jobId,
+      `${aiServiceUrl}/tempo`,
+      {
+        storagePath,
+      },
+    );
+
     await this.updateJobStatus(jobId, 'done', {
       stems: separated.stems,
       chords: chords.chords,
+      bpm: tempo.bpm,
+      key: tempo.key,
     });
   }
 
