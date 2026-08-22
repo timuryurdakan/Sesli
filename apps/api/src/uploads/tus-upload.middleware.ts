@@ -7,7 +7,7 @@ import type { Request, Response } from 'express';
 import { fileTypeFromFile } from 'file-type';
 import * as jwt from 'jsonwebtoken';
 import { FfmpegService } from '../ffmpeg/ffmpeg.service';
-import { StemSeparationQueueService } from '../queue/stem-separation.queue';
+import { TrackProcessingQueueService } from '../queue/track-processing.queue';
 import { SupabaseService } from '../supabase/supabase.service';
 import { getMaxUploadBytes, isAllowedMimeType } from './upload-validation';
 
@@ -65,7 +65,7 @@ export class TusUploadMiddleware implements NestMiddleware {
   constructor(
     private readonly supabase: SupabaseService,
     private readonly ffmpeg: FfmpegService,
-    private readonly queue: StemSeparationQueueService,
+    private readonly queue: TrackProcessingQueueService,
   ) {}
 
   use(req: Request, res: Response): void {

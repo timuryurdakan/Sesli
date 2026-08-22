@@ -6,13 +6,11 @@ from functools import lru_cache
 from pathlib import Path
 
 from demucs.api import Separator, save_audio
-from supabase import Client
 
-from .supabase_client import get_supabase
+from .supabase_client import download_from_storage, get_supabase, upload_to_storage
 
 logger = logging.getLogger(__name__)
 
-STORAGE_BUCKET = "tracks"
 MODEL_NAME = "htdemucs_6s"
 
 
@@ -32,15 +30,6 @@ def _get_separator() -> Separator:
 def _get_semaphore() -> asyncio.Semaphore:
     max_concurrent = int(os.environ.get("MAX_CONCURRENT_JOBS", "1"))
     return asyncio.Semaphore(max_concurrent)
-
-
-def _download_sync(supabase: Client, storage_path: str) -> bytes:
-    result: bytes = supabase.storage.from_(STORAGE_BUCKET).download(storage_path)
-    return result
-
-
-def _upload_sync(supabase: Client, dest: str, data: bytes) -> None:
-    supabase.storage.from_(STORAGE_BUCKET).upload(dest, data, {"content-type": "audio/wav"})
 
 
 def _run_separation_sync(input_path: Path) -> dict[str, Path]:
@@ -79,7 +68,7 @@ async def separate_track(job_id: str, storage_path: str) -> dict[str, str]:
         with tempfile.TemporaryDirectory(prefix="raw-") as tmp_dir:
             input_path = Path(tmp_dir) / "input.wav"
 
-            raw_bytes = await asyncio.to_thread(_download_sync, supabase, storage_path)
+            raw_bytes = await asyncio.to_thread(download_from_storage, supabase, storage_path)
             input_path.write_bytes(raw_bytes)
 
             stem_paths = await asyncio.to_thread(_run_separation_sync, input_path)
@@ -90,7 +79,7 @@ async def separate_track(job_id: str, storage_path: str) -> dict[str, str]:
                 for name, path in stem_paths.items():
                     dest = f"stems/{job_id}/{name}.wav"
                     data = path.read_bytes()
-                    await asyncio.to_thread(_upload_sync, supabase, dest, data)
+                    await asyncio.to_thread(upload_to_storage, supabase, dest, data)
                     result[name] = dest
                 return result
             finally:

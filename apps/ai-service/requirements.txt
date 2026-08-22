@@ -14,3 +14,8 @@ uvicorn[standard]==0.32.1
 numpy==2.5.2
 demucs==4.1.0
 supabase==2.31.0
+
+# Stage 05 — chord detection (librosa chroma features + our own Fujishima
+# template-matching; no permissively-licensed pretrained chord model exists,
+# see docs/handoffs/stage-05.md).
+librosa==1.0.0
