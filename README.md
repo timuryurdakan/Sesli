@@ -39,6 +39,10 @@ pip install -r requirements-dev.txt
 
 Her uygulamanın `.env.example` dosyasını `.env` olarak kopyalayıp değerleri doldurun (`apps/web`, `apps/api`, `apps/ai-service`).
 
+### FFmpeg (LGPL derleme — apps/api)
+
+`apps/api` dosya normalizasyonu için FFmpeg'e ihtiyaç duyar (Stage 03). **Bölüm 9.2 gereği yalnızca LGPL derlemesi kullanılmalı** (GPL bileşenler — libx264/libx265/librubberband — dahil eden derlemeler kapalı kaynak ticari kullanımla uyumsuzdur). Önerilen kaynak: [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/releases) "`*-lgpl*`" varyantı (Windows: `win64-lgpl`, Linux: `linux64-lgpl`). İndirip `apps/api/.env`'de `FFMPEG_PATH`/`FFPROBE_PATH` ile binary yolunu belirtin.
+
 ## Geliştirme
 
 ```bash

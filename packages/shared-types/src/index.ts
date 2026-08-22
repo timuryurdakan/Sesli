@@ -1,5 +1,14 @@
 export type JobStatus = "pending" | "processing" | "done" | "failed";
 
+export interface Track {
+  id: string;
+  userId: string;
+  title: string;
+  storagePath: string;
+  durationSeconds: number | null;
+  createdAt: string;
+}
+
 export interface ChordSegment {
   start: number;
   end: number;
